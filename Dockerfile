@@ -1,29 +1,64 @@
-# Use the official ROS 2 Humble base image
-FROM osrf/ros:humble-desktop
+# syntax=docker/dockerfile:1
+# Micromouse Simulator — headless ROS 2 Humble + Pygame, streamed via noVNC.
+# Builds cleanly on both linux/amd64 and linux/arm64/v8 (Raspberry Pi / Apple Silicon hosts).
 
-# Set non-interactive installation to prevent hanging prompts
-ENV DEBIAN_FRONTEND=noninteractive
+FROM ros:humble-ros-base
 
-# Install system dependencies, python tools, and common ROS messages
-RUN apt-get update && apt-get install -y \
+LABEL maintainer="ARC Micromouse Induction"
+LABEL description="Headless Pygame + ROS 2 Humble micromouse simulator, streamed over noVNC"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PYTHONUNBUFFERED=1
+
+# ---------------------------------------------------------------------------
+# System dependencies
+#   - xvfb        : virtual X11 framebuffer (no physical/host display needed)
+#   - x11vnc       : exposes the Xvfb framebuffer over VNC
+#   - novnc        : HTML5 VNC client, served over plain HTTP
+#   - websockify   : WebSocket<->TCP proxy that noVNC's launch.sh wraps
+#   - fluxbox      : minimal window manager so Pygame's window gets decorated
+#                     and centered instead of free-floating with no geometry
+#   - build-essential / python3-pip : compiling any native Python deps
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    fluxbox \
+    x11-xserver-utils \
+    build-essential \
     python3-pip \
-    python3-colcon-common-extensions \
-    ros-humble-geometry-msgs \
-    ros-humble-sensor-msgs \
+    python3-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working workspace inside the container
+# novnc's launch.sh expects "novnc_proxy" / websockify symlinked predictably
+# on some distros this is already true, but we pin it explicitly for safety.
+RUN ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
+
+# ---------------------------------------------------------------------------
+# Python dependencies (pinned for reproducibility across architectures)
+# ---------------------------------------------------------------------------
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir \
+        numpy==1.26.4 \
+        pygame==2.5.2
+
 WORKDIR /workspace
 
-# Copy and install python dependencies first (caches the layer)
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Copy project files. In dev, docker-compose bind-mounts over this anyway,
+# but baking it in keeps the image runnable standalone (e.g. `docker run`).
+COPY . /workspace
 
-# Source the ROS 2 setup script automatically whenever a shell opens
-RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+RUN chmod +x /workspace/entrypoint.sh
 
-# Expose port 5000 for our FastAPI Web UI
-EXPOSE 5000
+# noVNC web UI
+EXPOSE 8080
 
-# Set the default entry command to execute our web server
-CMD ["python3", "-m", "uvicorn", "simulator.web_server:app", "--host", "0.0.0.0", "--port", "5000"]
+# Source the ROS 2 environment for every shell/process in this image.
+RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
+
+ENTRYPOINT ["bash", "/workspace/entrypoint.sh"]

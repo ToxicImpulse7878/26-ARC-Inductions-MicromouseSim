@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  micromouse_simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Allows `DOCKER_DEFAULT_PLATFORM=linux/arm64 docker-compose build` on
+      # Apple Silicon / Pi hosts, while defaulting to the host's native arch.
+      platforms:
+        - "${DOCKER_DEFAULT_PLATFORM:-linux/amd64}"
+    platform: ${DOCKER_DEFAULT_PLATFORM:-}
+    image: micromouse_simulator:latest
+    container_name: micromouse_simulator
+
+    # Live-edit: host project folder is the container's working tree.
+    # Students edit student_agent/solver.py on their host OS in any editor
+    # and re-run; no rebuild required for pure Python changes.
+    volumes:
+      - .:/workspace
+
+    ports:
+      - "8080:8080"   # noVNC web client
+
+    environment:
+      - DISPLAY=:1
+      - PYTHONPATH=/workspace
+      - ROS_DOMAIN_ID=42   # isolated domain so multiple students on the
+                            # same LAN/lab network don't cross-talk on DDS
+      - QT_X11_NO_MITSHM=1
+      - SDL_VIDEODRIVER=x11
+
+    # Keep stdin/tty open so Ctrl+C cleanly propagates to the entrypoint
+    # script and its background children during local dev.
+    stdin_open: true
+    tty: true
+
+    restart: unless-stopped
