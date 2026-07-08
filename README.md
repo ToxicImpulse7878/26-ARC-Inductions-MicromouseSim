@@ -1,42 +1,53 @@
 # Micromouse Simulator — ARC Induction Task
 
-A fully containerised, browser-accessible Micromouse simulation framework built on **ROS 2 Humble** and **Pygame**, streamed to any browser via **noVNC** — no native ROS installation, no X11 forwarding, no host-side display setup required.
+A  containerised, browser-accessible Micromouse simulation framework built on **ROS 2 Humble** and **Pygame**, streamed to any browser via **noVNC**.
 
+## Progress as of now:
+Step 1  ← we are here
+        sim_engine.py draws a red square
+        confirms: Xvfb → x11vnc → noVNC → Pygame all work
+        so basically, all the pipelines or connections are done.
+
+Step 2
+        add maze_layouts.py rendering into sim_engine.py
+        confirms: coordinate system, wall drawing, goal zone
+        this is the coolest step, I think we should hardcode the thing first and then keep it as a backup and then look into backtracking maze generation and all that..      
+
+Step 3
+        add VirtualMouse into sim_engine.py
+        (position, heading, movement, collision)
+        confirms: physics loop, keyboard-driven testing
+
+Step 4
+        add SimNode into sim_engine.py
+        (the ROS node, scan publisher, cmd_vel subscriber)
+        confirms: rclpy.spin_once() inside pygame loop works
+
+Step 5
+        solver.py subscribes to /mouse/scan
+        publishes to /mouse/cmd_vel
+        confirms: full end-to-end ROS bridge works
+
+Step 6
+        replace hardcoded maze with .maz loader
+        + recursive backtracker fallback
 ---
-
-## Quick Start (3 commands)
+## install
+whatever, you can figure out how to clone and make the container... the dockerfie is in the repo only... it should have a native ros2 humble installed. and all python things like pygame and all the novnc things already installed..              <br>
 
 ```bash
-git clone <this-repo>
+git clone "whatever-the-link-is"
 cd micromouse_sim
 docker-compose up --build
 ```
 
-Open **http://localhost:8080/vnc.html** in any browser. You will see the live Pygame simulation window running inside a sandboxed Linux desktop.
+Open **http://localhost:8080/vnc.html** in any browser. You will see the live Pygame simulation of a box hopefully
 
 > **Apple Silicon / Raspberry Pi users:** prefix with `DOCKER_DEFAULT_PLATFORM=linux/arm64 docker-compose up --build`
 
 ---
 
-## Project Structure
-
-```
-micromouse_sim/
-├── Dockerfile              # ROS 2 Humble + Pygame + Xvfb/noVNC image
-├── docker-compose.yml      # Single-service compose with bind mount + port 8080
-├── entrypoint.sh           # Boots virtual display stack, then launches sim
-│
-├── simulator/
-│   ├── maze_layouts.py     # 33×33 NumPy maze matrix (encodes 16×16 cell maze)
-│   └── sim_engine.py       # Core engine: Pygame loop + ROS 2 node + physics
-│
-└── student_agent/
-    └── solver.py           # YOUR file: wall-follower baseline you modify
-```
-
----
-
-## Architecture Deep-Dive
+Read This AI jargon about why x11 forwarding is bad and novnc is good.(read it if u want)
 
 ### Why Docker + noVNC?
 
@@ -63,37 +74,7 @@ Host browser (any OS)
    [Pygame window]        (inside sim_engine.py)
 ```
 
-### The ROS 2 Control Bridge
-
-The simulation engine (`sim_engine.py`) runs **one ROS 2 node** (`micromouse_sim_node`) inside the Pygame process. Your solver (`solver.py`) runs as a **completely separate process** with its own node. They communicate only over ROS 2 topics — the standard pattern for real robot development.
-
-```
-┌──────────────────────────────────┐     ┌───────────────────────────┐
-│         sim_engine.py            │     │      solver.py            │
-│                                  │     │                           │
-│  VirtualMouse (physics)          │     │  WallFollowerNode         │
-│       │                          │     │       │                   │
-│  MicromouseSimNode               │     │       │                   │
-│    publishes /mouse/scan ────────┼────►│  scan subscriber          │
-│    subscribes /mouse/cmd_vel ◄───┼─────│  cmd_vel publisher        │
-└──────────────────────────────────┘     └───────────────────────────┘
-           (one process, foreground)          (separate terminal / process)
-```
-
-### Coordinate Systems
-
-Three systems in play — read `simulator/sim_engine.py`'s module docstring for the full explanation. Summary:
-
-| System | Origin | +Y direction | Used for |
-|--------|--------|-------------|----------|
-| **Grid space** | top-left of array | downward (numpy default) | maze data only |
-| **World space** | bottom-left of maze | upward (+Y = forward) | all physics/kinematics |
-| **Screen space** | top-left pixel | downward (Pygame default) | rendering only |
-
-All conversions happen in `world_to_screen()` and `world_to_grid()` — nowhere else.
-
 ---
-
 ## Running Your Solver
 
 While the simulator is running (`docker-compose up`), open a **second terminal** and exec into the same container:
@@ -102,26 +83,22 @@ While the simulator is running (`docker-compose up`), open a **second terminal**
 docker exec -it micromouse_simulator bash
 python3 student_agent/solver.py
 ```
-
-You should immediately see the blue triangular mouse start moving in the browser window.
-
-To reset the mouse to the start position, press **`R`** in the noVNC window (click the canvas first to give it keyboard focus).
+the mouse should reflect the movement instructions given by the solver
 
 ---
 
-## The Sensor/Actuator Interface
+## Plan for the ROS topics: 
 
-### Reading sensors — `/mouse/scan` (sensor_msgs/LaserScan)
+### Sensors:  `/mouse/scan` (sensor_msgs/LaserScan)
 
 Published at **20 Hz**. Only `ranges` matters:
 
 ```python
-d_left  = msg.ranges[0]   # left ray,  +90° from heading
-d_front = msg.ranges[1]   # front ray,  0° from heading
-d_right = msg.ranges[2]   # right ray, -90° from heading
+d_left  = msg.ranges[0]   # left ray,  
+d_front = msg.ranges[1]   # front ray,  
+d_right = msg.ranges[2]   # right ray, 
 
-# All in "cell-units" (1.0 ≈ one maze cell ≈ 18 cm IRL)
-# Maximum measurable range: msg.range_max = 4.0
+
 ```
 
 ### Sending commands — `/mouse/cmd_vel` (geometry_msgs/Twist)
@@ -136,47 +113,7 @@ publisher.publish(cmd)
 ```
 
 If no command arrives for **0.5 seconds**, the mouse automatically stops (safety timeout).
-
 ---
-
-## The Maze
-
-- **16 × 16 cell** competition layout, encoded as a **33 × 33** grid (`simulator/maze_layouts.py`)
-- Start position: cell **(0, 0)** — bottom-left corner, world coordinate `(1.5, 1.5)`
-- Goal: central **2 × 2** cell block (cells (7,7), (7,8), (8,7), (8,8) in 0-indexed row/col)
-- All 256 cells are reachable from the start (verified by BFS during build)
-- Shortest path to goal: **32 moves** — not trivial
-
-### Maze encoding key
-
-```
-1  = solid wall / column peg    (drawn as crimson red)
-0  = open driving corridor      (drawn as dark floor)
-```
-
----
-
-## Upgrading the Solver
-
-The built-in `WallFollowerNode` is a reactive left-hand follower. Here are progressively harder challenges:
-
-### Level 1 — Parameter Tuning (change the constants at the top of `solver.py`)
-Adjust `DRIVE_SPEED`, `SIDE_TARGET`, `FRONT_CLEAR` and observe how the mouse behaviour changes.
-
-### Level 2 — Right-Hand Follower
-Swap the spin preference from right to left in `STATE 1` and the free-turn direction in `STATE 2`. Does it still solve the maze? Why might one hand-rule fail in mazes the other doesn't?
-
-### Level 3 — Build a Map
-Track which cells have been visited. At each cell center (when `d_front > 0.6`, you're not at a wall), record which directions have open passages. Print the accumulated map to the terminal.
-
-### Level 4 — Flood-Fill Solver
-Implement the classic micromouse flood-fill: compute the Manhattan-distance from every cell to the goal, always move to the adjacent cell with the smallest value, and update the map (and recompute distances) when you discover a wall that wasn't predicted.
-
-### Level 5 — Speed Run
-After a mapping pass (any algorithm), compute the shortest known path and replay it as fast as possible using velocity ramps (accelerate, cruise, brake).
-
----
-
 ## Environment Variables
 
 | Variable | Default | Purpose |
@@ -185,15 +122,6 @@ After a mapping pass (any algorithm), compute the shortest known path and replay
 | `PYTHONPATH` | `/workspace` | lets `simulator/` and `student_agent/` import each other |
 | `ROS_DOMAIN_ID` | `42` | isolates ROS 2 DDS traffic from other students on the same LAN |
 | `SDL_VIDEODRIVER` | `x11` | forces Pygame to use X11 (not framebuffer or Wayland) |
-
----
-
-## Keyboard Shortcuts (click the noVNC canvas first)
-
-| Key | Action |
-|-----|--------|
-| `R` | Reset mouse to start position |
-| `Esc` | Quit the simulator (container will restart per `restart: unless-stopped`) |
 
 ---
 
@@ -234,4 +162,4 @@ Only changes to `Dockerfile`, `entrypoint.sh`, or system-level dependencies requ
 
 ---
 
-*Built for the Automation & Robotics Club (ARC) freshmen induction, BITS Pilani.*
+
