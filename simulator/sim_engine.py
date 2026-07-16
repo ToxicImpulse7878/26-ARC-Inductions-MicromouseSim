@@ -56,10 +56,14 @@ def validate_and_load_constraints():
     print(f"Constraint Verification Succeeded! (Used: {total_points}/30)")
     
     return {
-        "max_speed": top_speed * 0.2,          
-        "accel_rate": acceleration * 0.1,      
-        "max_turn_rate": turn_speed * 0.15,    
-        "max_sensor_range": sensor_range * 0.4 
+        "max_speed": top_speed * 0.2,
+        "accel_rate": acceleration * 0.1,
+        "max_turn_rate": turn_speed * 0.15,
+        "max_sensor_range": sensor_range * 0.4,
+        "pts_speed": top_speed,
+        "pts_accel": acceleration,
+        "pts_turn": turn_speed,
+        "pts_sensor": sensor_range,
     }
 
 class VirtualMouse:
@@ -294,6 +298,64 @@ def draw_mouse(surface: pygame.Surface, mouse: VirtualMouse):
     pygame.draw.line(surface, (255, 255, 255), (sx, sy), (hx, hy), 2)
 
 
+def draw_rays(surface: pygame.Surface, mouse: VirtualMouse):
+    max_r = mouse.config["max_sensor_range"]
+    angles = [
+        mouse.heading + math.pi / 2,  # left
+        mouse.heading,                 # front
+        mouse.heading - math.pi / 2,  # right
+    ]
+    sx, sy = world_to_screen(mouse.x, mouse.y)
+    for angle in angles:
+        dist = mouse._cast_ray(angle, max_r)
+        ex = mouse.x + math.cos(angle) * dist
+        ey = mouse.y + math.sin(angle) * dist
+        esx, esy = world_to_screen(ex, ey)
+        pygame.draw.line(surface, (80, 180, 255), (int(sx), int(sy)), (int(esx), int(esy)), 1)
+        pygame.draw.circle(surface, (255, 80, 80), (int(esx), int(esy)), 3)
+
+
+def draw_hud(surface: pygame.Surface, config: dict, elapsed_sec: float):
+    font = pygame.font.SysFont("monospace", 13, bold=True)
+    pts = [config["pts_speed"], config["pts_accel"], config["pts_turn"], config["pts_sensor"]]
+    total = sum(pts)
+    mins = int(elapsed_sec) // 60
+    secs = elapsed_sec % 60
+    lines = [
+        (f"SPD {pts[0]:2d}", f"ACC {pts[1]:2d}"),
+        (f"TRN {pts[2]:2d}", f"SNS {pts[3]:2d}"),
+        (f"TOT {total:2d}/30", f"{mins:02d}:{secs:05.2f}"),
+    ]
+    pw, ph = 148, 60
+    px = MAZE_MARGIN_X + MAZE_DRAW_SIZE - pw - 4
+    py = MAZE_MARGIN_PX + 4
+    panel = pygame.Surface((pw, ph), pygame.SRCALPHA)
+    panel.fill((10, 10, 20, 190))
+    surface.blit(panel, (px, py))
+    y = py + 7
+    for left, right in lines:
+        surface.blit(font.render(left,  True, (190, 210, 255)), (px + 6, y))
+        surface.blit(font.render(right, True, (190, 210, 255)), (px + pw // 2 + 4, y))
+        y += 17
+
+
+def draw_solved(surface: pygame.Surface, elapsed_sec: float):
+    overlay = pygame.Surface((WINDOW_W, WINDOW_H), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 160))
+    surface.blit(overlay, (0, 0))
+    font_big = pygame.font.SysFont("monospace", 52, bold=True)
+    font_sm  = pygame.font.SysFont("monospace", 24)
+    mins = int(elapsed_sec) // 60
+    secs = elapsed_sec % 60
+    t1 = font_big.render("SOLVED!", True, (60, 230, 110))
+    t2 = font_sm.render(f"Time: {mins:02d}:{secs:05.2f}", True, (200, 255, 210))
+    t3 = font_sm.render("Press R to restart", True, (160, 160, 180))
+    cx, cy = WINDOW_W // 2, WINDOW_H // 2
+    surface.blit(t1, t1.get_rect(center=(cx, cy - 40)))
+    surface.blit(t2, t2.get_rect(center=(cx, cy + 20)))
+    surface.blit(t3, t3.get_rect(center=(cx, cy + 55)))
+
+
 def main():
     # if constraint fail, then crash with log
     try:
@@ -319,6 +381,10 @@ def main():
     max_s = config["max_speed"]
     max_t = config["max_turn_rate"]
 
+    start_time  = time.time()
+    solved      = False
+    solved_time = 0.0
+
     # main loop
     running = True
     while running:
@@ -327,26 +393,46 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    virtual_mouse.x, virtual_mouse.y = START_POS
+                    virtual_mouse.heading = math.pi / 2
+                    virtual_mouse.set_targets(0.0, 0.0)
+                    start_time  = time.time()
+                    solved      = False
+                    solved_time = 0.0
 
-        # keyboard fallback — only active when ROS solver isn't sending commands
-        if time.time() - sim_node.last_cmd_time > 0.5:
-            keys = pygame.key.get_pressed()
-            kl = ka = 0.0
-            if keys[pygame.K_w] or keys[pygame.K_UP]:    kl =  max_s
-            if keys[pygame.K_s] or keys[pygame.K_DOWN]:  kl = -max_s
-            if keys[pygame.K_a] or keys[pygame.K_LEFT]:  ka =  max_t
-            if keys[pygame.K_d] or keys[pygame.K_RIGHT]: ka = -max_t
-            virtual_mouse.set_targets(kl, ka)
+        if not solved:
+            # keyboard fallback — only active when ROS solver isn't sending commands
+            if time.time() - sim_node.last_cmd_time > 0.5:
+                keys = pygame.key.get_pressed()
+                kl = ka = 0.0
+                if keys[pygame.K_w] or keys[pygame.K_UP]:    kl =  max_s
+                if keys[pygame.K_s] or keys[pygame.K_DOWN]:  kl = -max_s
+                if keys[pygame.K_a] or keys[pygame.K_LEFT]:  ka =  max_t
+                if keys[pygame.K_d] or keys[pygame.K_RIGHT]: ka = -max_t
+                virtual_mouse.set_targets(kl, ka)
 
-        # --- PHYSICS ---
-        virtual_mouse.update(dt)
+            # --- PHYSICS ---
+            virtual_mouse.update(dt)
+
+            # --- GOAL DETECTION ---
+            if 7.0 <= virtual_mouse.x <= 9.0 and 7.0 <= virtual_mouse.y <= 9.0:
+                solved      = True
+                solved_time = time.time() - start_time
+                virtual_mouse.set_targets(0.0, 0.0)
 
         # --- ROS 2 SPIN ---
         rclpy.spin_once(sim_node, timeout_sec=0.0)
 
         # --- RENDERING ---
+        elapsed = solved_time if solved else time.time() - start_time
         draw_maze(screen)
         draw_mouse(screen, virtual_mouse)
+        draw_rays(screen, virtual_mouse)
+        draw_hud(screen, config, elapsed)
+        if solved:
+            draw_solved(screen, solved_time)
         pygame.display.flip()
 
     # cleanup
