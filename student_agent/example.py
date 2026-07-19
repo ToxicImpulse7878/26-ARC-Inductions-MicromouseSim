@@ -53,7 +53,7 @@ class StudentSolver(Node):
         
         #-------- DEMO LOGIC ---------
         # 1. Front is blocked -> Pivot strictly in place (do not move forward!)
-        # Increased threshold to 0.65 so it has room to spin without its 0.3 radius clipping the front wall
+        # Increased threshold to 0.65 so it has room to spin without its 0.15 radius clipping the front wall
         if d_front < 0.65:
             cmd.linear.x = 0.0
             cmd.angular.z = -1.5  # Spin clockwise (right)
