@@ -1,165 +1,149 @@
-# Micromouse Simulator — ARC Induction Task
+# ARC Micromouse Simulator — Induction Task
 
-A  containerised, browser-accessible Micromouse simulation framework built on **ROS 2 Humble** and **Pygame**, streamed to any browser via **noVNC**.
+Welcome to the induction program for our club. This repository will guide you through the Micromouse task, helping you get started with Docker, ROS 2, and basic pathfinding algorithms. 
 
-## Progress as of now:
-Step 1  ← we are here
-        sim_engine.py draws a red square
-        confirms: Xvfb → x11vnc → noVNC → Pygame all work
-        so basically, all the pipelines or connections are done.
+Your objective is to write a maze-solving algorithm inside `student_agent/solver.py` to navigate a virtual robot through an unknown maze and park it inside the green 2x2 goal zone. 
 
-Step 2
-        add maze_layouts.py rendering into sim_engine.py
-        confirms: coordinate system, wall drawing, goal zone
-        this is the coolest step, I think we should hardcode the thing first and then keep it as a backup and then look into backtracking maze generation and all that..      
-
-Step 3
-        add VirtualMouse into sim_engine.py
-        (position, heading, movement, collision)
-        confirms: physics loop, keyboard-driven testing
-
-Step 4
-        add SimNode into sim_engine.py
-        (the ROS node, scan publisher, cmd_vel subscriber)
-        confirms: rclpy.spin_once() inside pygame loop works
-
-Step 5
-        solver.py subscribes to /mouse/scan
-        publishes to /mouse/cmd_vel
-        confirms: full end-to-end ROS bridge works
-
-Step 6
-        replace hardcoded maze with .maz loader
-        + recursive backtracker fallback
 ---
-## install
-whatever, you can figure out how to clone and make the container... the dockerfie is in the repo only... it should have a native ros2 humble installed. and all python things like pygame and all the novnc things already installed..              <br>
 
+## Contents
+1. [How to Submit Your Work](#how-to-submit-your-work)
+2. [Prerequisites](#prerequisites)
+3. [Your Task](#your-task)
+4. [The 30-Point System](#the-30-point-system)
+5. [Installation & Setup](#installation--setup)
+6. [How to Control the Mouse (ROS 2 API)](#how-to-control-the-mouse-ros-2-api)
+7. [Map Configuration](#map-configuration)
+8. [Troubleshooting](#troubleshooting)
+
+---
+
+## How to Submit Your Work
+1. **Fork this repository** into your own GitHub account.
+2. Clone **your forked repository** to your local machine.
+3. Complete the task by writing your solver logic inside `student_agent/solver.py`.
+4. Run `git add .` followed by `git commit -m <PR Title>` to commit your changes.
+5. Run `git push` to push your changes to GitHub.
+6. Submit a **Pull Request (PR)** to the main repository.
+   * **PR Title format:** `NAME [ID_NUMBER]` (Example: `Archisman Das [2025B3PS0478H]`).
+   * **PR Description format:** Must include your Full Name, ID Number, and Institute Email.
+7. Wait for review and feedback!
+
+---
+
+## Prerequisites
+
+You are not expected to have any prior robotics software installed on your machine. Everything runs inside an isolated container. Before starting, please ensure you have the following installed:
+* **Git**
+* **Docker** (Windows users: Install Docker Desktop and ensure WSL2 is enabled).
+* **Docker Compose**
+* Basic knowledge of the Linux terminal.
+
+---
+
+## Your Task
+1. **Analyze the Example:** We have provided a baseline script in `student_agent/example.py`. You can run this file inside the container to see how the robot interacts with the maze and the ROS 2 API.
+2. **Write Your Solver:** Your actual algorithm must be written inside `student_agent/solver.py`. **You only need to edit this single file—do not modify the simulator engine, maze generator, or any other files.**
+3. **Solve the Maze:** Your goal is to write a robust algorithm in the `scan_callback` function of `solver.py` that can consistently navigate the virtual robot into the green 2x2 goal zone on *any* random map layout. 
+
+---
+
+## The 30-Point System
+
+At the top of your `student_agent/solver.py` script, you must set your robot's physical stats. 
+
+You have a strict budget of **30 points** to distribute among four physical traits. These four must add up to exactly 30:
+
+```python
+TOP_SPEED = 8
+ACCELARATION = 7
+TURN_SPEED = 5
+SENSOR_RANGE = 10
+```
+
+If your total exceeds 30, the simulation engine will crash immediately. You must balance these stats based on how your algorithm behaves—a fast bot with terrible sensors might crash into walls, while a bot with maximum sensors might be too slow to get a competitive track time.
+
+---
+
+## Installation & Setup
+
+**Clone the Repository:**
+Make sure you are cloning your own fork.
 ```bash
-git clone "whatever-the-link-is"
-cd micromouse_sim
-docker-compose up --build
+git clone <your-fork-url>
+cd 26-ARC-Inductions-MicromouseSim
 ```
 
-Open **http://localhost:8080/vnc.html** in any browser. You will see the live Pygame simulation of a box hopefully
-
-> **Apple Silicon / Raspberry Pi users:** prefix with `DOCKER_DEFAULT_PLATFORM=linux/arm64 docker-compose up --build`
-
----
-
-Read This AI jargon about why x11 forwarding is bad and novnc is good.(read it if u want)
-
-### Why Docker + noVNC?
-
-A ROS 2 + Pygame stack normally requires:
-- A working ROS 2 Humble installation on the host
-- A connected display (or `$DISPLAY` forwarding, which breaks on Windows/macOS)
-- Matching Python/library versions
-
-This framework eliminates all of that. The container runs a **headless virtual framebuffer** (Xvfb) that Pygame draws into. `x11vnc` captures that framebuffer and streams it over VNC. `noVNC` proxies the VNC stream into an HTML5 canvas served over HTTP. You only need Docker and a browser.
-
+**Start the Simulator Engine:**
+```bash
+docker-compose up -d --build
 ```
-Host browser (any OS)
-        │  HTTP :8080
-        ▼
-   [noVNC HTML5 client]  (inside container)
-        │  WebSocket → TCP proxy (websockify)
-        ▼
-   [x11vnc]              (inside container, VNC :5900)
-        │  reads
-        ▼
-   [Xvfb :1]             (virtual 800×800×16 framebuffer)
-        │  DISPLAY=:1
-        ▼
-   [Pygame window]        (inside sim_engine.py)
-```
+*(Apple Silicon Mac / Raspberry Pi users: prefix the command with `DOCKER_DEFAULT_PLATFORM=linux/arm64`)*
 
----
-## Running Your Solver
+**View the UI:**
+Open a web browser and go to http://localhost:8080. You will access a Linux desktop in your browser using noVNC. You should see the live Pygame simulation waiting for commands.
 
-While the simulator is running (`docker-compose up`), open a **second terminal** and exec into the same container:
-
+**Run Your Solver:**
+Leave the simulator running in the background. Open a second terminal window on your host machine and drop into the container to execute your code:
 ```bash
 docker exec -it micromouse_simulator bash
 python3 student_agent/solver.py
 ```
-the mouse should reflect the movement instructions given by the solver
 
 ---
 
-## Plan for the ROS topics: 
+## How to Control the Mouse (ROS 2 API)
 
-### Sensors:  `/mouse/scan` (sensor_msgs/LaserScan)
+We have already written the ROS 2 boilerplate for you in `student_agent/solver.py`! You just need to use the provided variables to read the sensors and set the movement speeds.
 
-Published at **20 Hz**. Only `ranges` matters:
-
+### 1. Reading Sensors
+Inside your `scan_callback` function, the bot emits three raycasts at 20 Hz. The distances to the nearest walls are automatically extracted into these variables for you:
 ```python
-d_left  = msg.ranges[0]   # left ray,  
-d_front = msg.ranges[1]   # front ray,  
-d_right = msg.ranges[2]   # right ray, 
-
-
+d_left  = msg.ranges[0]   # Distance to left wall
+d_front = msg.ranges[1]   # Distance to front wall
+d_right = msg.ranges[2]   # Distance to right wall
 ```
+*(Note: Larger values mean more open space.)*
 
-### Sending commands — `/mouse/cmd_vel` (geometry_msgs/Twist)
-
+### 2. Moving the Bot
+A Twist message named `cmd` is already initialized in your callback. To move the bot, simply set its linear and angular speeds:
 ```python
-from geometry_msgs.msg import Twist
-
-cmd = Twist()
-cmd.linear.x  = 0.8   # forward speed, cell-units/sec (+forward, -reverse)
-cmd.angular.z = 1.0   # turn rate, rad/sec (+left/CCW, -right/CW)
-publisher.publish(cmd)
+cmd.linear.x  = 0.5   # Forward speed (+forward, -reverse)
+cmd.angular.z = 1.0   # Turn rate (+left/CCW, -right/CW)
 ```
+The template code handles publishing this command (`self.cmd_pub.publish(cmd)`) at the very end of the function automatically.
 
-If no command arrives for **0.5 seconds**, the mouse automatically stops (safety timeout).
+**Safety Feature:** If your solver crashes or stops sending commands for 0.5 seconds, the mouse will automatically hit the brakes.
+
 ---
-## Environment Variables
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `DISPLAY` | `:1` | X11 display that Pygame and Xvfb share |
-| `PYTHONPATH` | `/workspace` | lets `simulator/` and `student_agent/` import each other |
-| `ROS_DOMAIN_ID` | `42` | isolates ROS 2 DDS traffic from other students on the same LAN |
-| `SDL_VIDEODRIVER` | `x11` | forces Pygame to use X11 (not framebuffer or Wayland) |
+## Map Configuration
+
+By default, the simulator loads a fixed map *[Seed 67 ;)]* so you can consistently test and tune your parameters. Once your algorithm works, you must test it against random layouts!
+
+Open `simulator/maze_layouts.py` and change the configuration at the bottom of the file:
+```python
+# True = Uses the same map every time (good for testing/tuning).
+# False = Generates a completely new random map on every run.
+USE_FIXED_MAP = False
+```
+
+---
+
+## Development Workflow
+
+* The project folder is bind-mounted into the Docker container. This means you do not need to restart Docker or rebuild the image when you write code.
+* Edit `student_agent/solver.py` using VS Code (or your preferred editor) on your host machine (Windows/Mac/Linux).
+* Save the file.
+* Stop (`Ctrl+C`) and restart the `python3 student_agent/solver.py` script in your second terminal.
+
+*(Note: Only changes to the `Dockerfile` or `requirements.txt` require a full `docker-compose up -d --build`)*
 
 ---
 
 ## Troubleshooting
 
-**Black screen in browser:**
-Wait 5–10 seconds after `docker-compose up` for all background services to start. If it stays black, check `docker logs micromouse_simulator` for startup errors.
-
-**"Cannot connect to display :1":**
-Xvfb didn't start cleanly. Run `docker-compose down && docker-compose up` to restart cleanly.
-
-**Solver can't connect / no motion:**
-Make sure `ROS_DOMAIN_ID=42` is set in the terminal where you run `solver.py`:
-```bash
-export ROS_DOMAIN_ID=42
-source /opt/ros/humble/setup.bash
-python3 student_agent/solver.py
-```
-
-**Mouse stutters or teleports:**
-The sim is CPU-bound on a slow host. Reduce `TARGET_FPS` in `sim_engine.py` from 60 to 30.
-
-**ARM64 / Apple Silicon build fails:**
-```bash
-DOCKER_DEFAULT_PLATFORM=linux/arm64 docker-compose up --build
-```
-
----
-
-## File Edit Workflow (Live Reload)
-
-The project folder is bind-mounted into the container at `/workspace`. This means:
-- Edit `student_agent/solver.py` in any editor on your host machine
-- The changes are immediately visible inside the container
-- Just restart the solver process inside the container — no image rebuild needed
-
-Only changes to `Dockerfile`, `entrypoint.sh`, or system-level dependencies require a rebuild.
-
----
-
-
+* **Black screen in browser:** Wait 5–10 seconds after `docker-compose up` for background services to start. If it stays black, check `docker logs micromouse_simulator`.
+* **"Cannot connect to display :1":** The virtual display crashed. Run `docker-compose down && docker-compose up -d` for a clean restart.
+* **Solver connects but no motion:** Ensure you don't have multiple ROS nodes conflicting. You can force isolation by running `export ROS_DOMAIN_ID=42` inside the container before running your solver.
+* **Code changes not reflecting:** Ensure you are restarting the `solver.py` script in your second terminal after saving your changes.
