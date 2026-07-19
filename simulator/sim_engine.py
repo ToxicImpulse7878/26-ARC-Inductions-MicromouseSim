@@ -48,11 +48,12 @@ def validate_and_load_constraints():
     
     total_points = top_speed + acceleration + turn_speed + sensor_range
     
-    if total_points > 30:
-        raise ValueError(f" CONSTRAINT VIOLATION: Total allocated points ({total_points}) exceeds budget of 30!")
-    if total_points == 0:
-        raise ValueError(" CONFIGURATION ERROR: Point values cannot be evaluated at zero.")
-        
+    if top_speed < 0 or acceleration < 0 or turn_speed < 0 or sensor_range < 0:
+        raise ValueError(" CONSTRAINT VIOLATION: Nice try! Point allocations cannot be negative.")
+
+    if total_points != 30:
+        raise ValueError(f" CONSTRAINT VIOLATION: Total allocated points ({total_points}) must equal exactly 30!")
+            
     print(f"Constraint Verification Succeeded! (Used: {total_points}/30)")
     
     return {
@@ -73,17 +74,36 @@ class VirtualMouse:
         self.config = config
         self.x, self.y = START_POS
         self.heading   = math.pi / 2  # facing north
+        
+        # Current speeds
         self.v_linear  = 0.0
         self.v_angular = 0.0
+        
+        # Commanded targets
+        self.target_linear = 0.0
+        self.target_angular = 0.0
 
     def set_targets(self, linear: float, angular: float):
-        self.v_linear  = linear
-        self.v_angular = angular
+        self.target_linear = linear
+        self.target_angular = angular
 
     def update(self, dt: float):
+        # --- Apply Acceleration Limit ---
+        accel = self.config["accel_rate"]
+        
+        if self.v_linear < self.target_linear:
+            self.v_linear = min(self.target_linear, self.v_linear + accel * dt)
+        elif self.v_linear > self.target_linear:
+            self.v_linear = max(self.target_linear, self.v_linear - accel * dt)
+            
+        # Turn speed is usually instant for micromice, but we cap its max rate
+        self.v_angular = self.target_angular
+        
+        # --- Apply Physics ---
         self.heading += self.v_angular * dt
         dx = self.v_linear * math.cos(self.heading) * dt
         dy = self.v_linear * math.sin(self.heading) * dt
+        
         nx, ny = self.x + dx, self.y + dy
         if not self._collides(nx, ny):
             self.x, self.y = nx, ny
@@ -389,12 +409,23 @@ def main():
     running = True
     while running:
         dt = clock.tick(60) / 1000.0  # seconds since last frame
+        dt = min(dt, 0.1) # Never simulate a step larger than 100ms
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
+                    # --- Live-reload constraints on reset ---
+                    try:
+                        new_config = validate_and_load_constraints()
+                        virtual_mouse.config = new_config
+                        print("Constraints successfully reloaded!")
+                    except Exception as e:
+                        print(f"FAILED TO RELOAD CONSTRAINTS (Check your solver.py for errors): {e}")
+                        print("Keeping previous constraints.")
+                    
+                    # Reset physics
                     virtual_mouse.x, virtual_mouse.y = START_POS
                     virtual_mouse.heading = math.pi / 2
                     virtual_mouse.set_targets(0.0, 0.0)

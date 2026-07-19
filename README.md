@@ -25,7 +25,7 @@ Your objective is to write a maze-solving algorithm inside `student_agent/solver
 4. Run `git add .` followed by `git commit -m <PR Title>` to commit your changes.
 5. Run `git push` to push your changes to GitHub.
 6. Submit a **Pull Request (PR)** to the main repository.
-   * **PR Title format:** `NAME [ID_NUMBER]` (Example: `Archisman Das [2025B3PS0478H]`).
+   * **PR Title format:** `NAME [ID_NUMBER]` (Example: `Archisman Das [2026B3PS0478H]`).
    * **PR Description format:** Must include your Full Name, ID Number, and Institute Email.
 7. Wait for review and feedback!
 
@@ -42,7 +42,7 @@ You are not expected to have any prior robotics software installed on your machi
 ---
 
 ## Your Task
-1. **Analyze the Example:** We have provided a baseline script in `student_agent/example.py`. You can run this file inside the container to see how the robot interacts with the maze and the ROS 2 API.
+1. **Analyze the Example:** We have provided a baseline script in `student_agent/solver.py`. You can run this file inside the container to see how the robot interacts with the maze and the ROS 2 API.
 2. **Write Your Solver:** Your actual algorithm must be written inside `student_agent/solver.py`. **You only need to edit this single file—do not modify the simulator engine, maze generator, or any other files.**
 3. **Solve the Maze:** Your goal is to write a robust algorithm in the `scan_callback` function of `solver.py` that can consistently navigate the virtual robot into the green 2x2 goal zone on *any* random map layout. 
 
