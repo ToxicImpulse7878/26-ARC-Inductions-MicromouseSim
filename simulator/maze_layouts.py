@@ -1,11 +1,3 @@
-# lets figure this out :)
-
-"""
-1. lets hardcode it as a 2d array of zeroes and ones using ai and then keep that as a backup in case no one works anymore... and finds this boring
-2. official micromouse uses .mz files for their maze, lets check out how that works and try to implement
-3. some recurisive algo, although it maybe would be hard to make a "goal region" like standard micromouse mazes have.
-"""
-
 import numpy as np
 import random
 
@@ -15,7 +7,6 @@ NUM_CELLS = 16
 START_POS  = (1.5, 1.5)
 GOAL_CELLS = [(7, 7), (7, 8), (8, 7), (8, 8)]
 GOAL_CENTER = (8.0, 8.0)
-
 
 def _cell_to_grid(row: int, col: int):
     """Cell (row, col) → center index in the 33x33 grid."""
@@ -72,5 +63,16 @@ def generate_maze(seed: int = 67) -> np.ndarray:
 
     return grid
 
+# ==========================================
+# MAP SETTINGS
+# ==========================================
+# True  = Uses the same map every time (good for testing/tuning).
+# False = Generates a completely new random map on every run.
+USE_FIXED_MAP = True
 
-MAZE_GRID: np.ndarray = generate_maze(seed=67)
+if USE_FIXED_MAP:
+    print("[Maze Generator] Loading fixed layout (Seed: 67)...")
+    MAZE_GRID: np.ndarray = generate_maze(seed=67)
+else:
+    print("[Maze Generator] Generating random layout...")
+    MAZE_GRID: np.ndarray = generate_maze(seed=None)

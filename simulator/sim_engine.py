@@ -67,7 +67,7 @@ def validate_and_load_constraints():
     }
 
 class VirtualMouse:
-    RADIUS = 0.3  # collision radius in world units
+    RADIUS = 0.15  # collision radius in world units
 
     def __init__(self, config):
         self.config = config
