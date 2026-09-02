@@ -37,6 +37,10 @@ class StudentSolver(Node):
         self.get_logger().info("Student Solver Node initialized successfully.")
         self.get_logger().info(f"Stats -> Speed: {TOP_SPEED}, Accel: {ACCELARATION}, Turn: {TURN_SPEED}, Range: {SENSOR_RANGE}")
         self.prev_left = 0.0
+        self.turning = 0
+        self.stuck = 0
+
+
 
     def scan_callback(self, msg):
         """
@@ -50,16 +54,34 @@ class StudentSolver(Node):
         d_front = msg.ranges[1]
         d_right = msg.ranges[2]
         dL = d_left - self.prev_left     
+        if abs(dL) < 0.01:
+            self.stuck += 1
+        else:
+            self.stuck = 0
+
+        if self.stuck > 20:
+            self.turning = 25
+            self.stuck = 0
+            
         print(f"L={d_left:.2f} F={d_front:.2f} R={d_right:.2f} dL={dL:.2f}")
 
         cmd = Twist()
+        if self.turning > 0:
+            self.turning -= 1
+            cmd.linear.x = 0.0
+            cmd.angular.z = -1.5
+            self.cmd_pub.publish(cmd)
+            self.prev_left = d_left
+            return
         
         #-------- DEMO LOGIC, REMOVE THIS AND WRITE YOUR OWN ---------
         # 1. Front is blocked -> Pivot strictly in place (do not move forward!)
         # Increased threshold to 0.65 so it has room to spin without its 0.15 radius clipping the front wall
+        
         if d_front < 0.65:
+            self.turning = 40
             cmd.linear.x = 0.0
-            cmd.angular.z = -1.5  # Spin clockwise (right)
+            cmd.angular.z = -1.5
             
         # 2. Left side is open -> Curve around the corner
         elif d_left > 0.8:
