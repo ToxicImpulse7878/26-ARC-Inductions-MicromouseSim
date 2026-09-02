@@ -10,9 +10,9 @@ from geometry_msgs.msg import Twist
 # ==========================================
 # These four parameters MUST add up to exactly 30!
 # ==========================================
-TOP_SPEED = 8
-ACCELARATION = 7
-TURN_SPEED = 5
+TOP_SPEED = 5
+ACCELARATION = 5
+TURN_SPEED = 10
 SENSOR_RANGE = 10
 
 class StudentSolver(Node):
@@ -36,6 +36,7 @@ class StudentSolver(Node):
         
         self.get_logger().info("Student Solver Node initialized successfully.")
         self.get_logger().info(f"Stats -> Speed: {TOP_SPEED}, Accel: {ACCELARATION}, Turn: {TURN_SPEED}, Range: {SENSOR_RANGE}")
+        self.prev_left = 0.0
 
     def scan_callback(self, msg):
         """
@@ -48,7 +49,9 @@ class StudentSolver(Node):
         d_left = msg.ranges[0]
         d_front = msg.ranges[1]
         d_right = msg.ranges[2]
-        
+        dL = d_left - self.prev_left     
+        print(f"L={d_left:.2f} F={d_front:.2f} R={d_right:.2f} dL={dL:.2f}")
+
         cmd = Twist()
         
         #-------- DEMO LOGIC, REMOVE THIS AND WRITE YOUR OWN ---------
@@ -74,7 +77,7 @@ class StudentSolver(Node):
             # Multiply error by a gain to steer back to the center
             cmd.angular.z = error * 3.0
         #-----------------------------------------------------------------
-            
+        self.prev_left = d_left   
         self.cmd_pub.publish(cmd)
 
 def main(args=None):
